@@ -1,0 +1,60 @@
+name: Build & Release AI Arena
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            label: Windows
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            label: macOS Intel
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS Apple Silicon
+          - platform: ubuntu-22.04
+            label: Linux
+
+    runs-on: ${{ matrix.platform }}
+    name: ${{ matrix.label }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+      - run: npm ci
+      - name: Build
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'AI Arena ${{ github.ref_name }}'
+          releaseBody: |
+            ## AI Arena - Multi Model Chat
+            Claude, GPT-4o, Gemini, Mistral, Grok, Llama, DeepSeek, Cohere
+          releaseDraft: false
+          prerelease: false
